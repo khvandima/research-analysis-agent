@@ -19,7 +19,7 @@ async def main():
     config = {'configurable': {'thread_id': '1'}}
 
     result = await app.ainvoke(
-        {"messages": [HumanMessage(content="Сравни что написано в документах про ML с последними новостями в интернете")]},
+        {"messages": [HumanMessage(content="Сравни")]},
         config=config
     )
 

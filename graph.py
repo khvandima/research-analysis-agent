@@ -3,6 +3,7 @@ from dotenv import load_dotenv
 import os
 from datetime import datetime
 
+from langgraph.constants import END
 from langgraph.prebuilt import ToolNode, tools_condition
 from qdrant_client import QdrantClient
 
@@ -146,6 +147,31 @@ def make_agent_node(client):
                                                 У тебя есть инструменты для поиска информации.
                                                 Всегда отвечай на русском языке.
                                                 Текущее время: {datetime.now().isoformat()}""")
+
+                system = SystemMessage(content=f"""Ты Research & Analysis Agent — экспертный исследовательский ассистент.
+
+                                                ## Стратегия поиска
+                                                - Если вопрос про загруженные документы → используй search_documents
+                                                - Если вопрос про текущие события или новости → используй web_search  
+                                                - Если пользователь даёт ссылку на Google Doc → используй read_google_doc для чтения или ingest_google_docs для добавления в базу знаний
+                                                - Если пользователь просит добавить PDF → используй ingest_pdf_file с путём к файлу
+                                                - Если вопрос требует сравнения или глубокого анализа → используй оба инструмента search_documents и web_search
+                                                - Если не нашёл релевантной информации → честно скажи об этом, не придумывай
+                                                
+                                                ## Формат ответа
+                                                - Отвечай структурированно: сначала прямой ответ, потом детали
+                                                - Всегда указывай источник: "По данным документов..." или "По данным из интернета..."
+                                                - Если информация из нескольких источников — сравни и синтезируй
+                                                - Отвечай на том же языке что и вопрос пользователя
+                                                
+                                                ## Ограничения
+                                                - Никогда не придумывай факты которых нет в источниках
+                                                - Если информации недостаточно — предложи уточнить вопрос
+                                                - Не повторяй вопрос пользователя в ответе
+                                                
+                                                Текущее время: {datetime.now().isoformat()}""")
+
+
                 messages = [system] + state['messages']
                 response = await llm_with_tools.ainvoke(messages)
                 return {'messages': [response]}
@@ -163,6 +189,24 @@ async def make_tool_node(client):
     tools = await client.get_tools()
     return ToolNode(tools=tools)
 
+# =============================== Validator node ===============================
+
+def validator_node(state: AgentState) -> dict:
+    question = state['messages'][-1].content.strip()
+    if len(question) < 10:
+        return {'messages': [AIMessage(content='Недостаточная длинна вопроса')]}
+    if not any(c.isalpha() for c in question):
+        return {'messages': [AIMessage(content='Вопрос состоит из цифр')]}
+
+    return {}
+
+
+def validator_decision(state: AgentState) -> str:
+    last_message = state['messages'][-1]
+    if isinstance(last_message, AIMessage):
+        return END
+    return 'agent'
+
 
 # =============================== Graph ===============================
 
@@ -170,10 +214,13 @@ def build_graph(agent_node, tool_node):
     checkpointer = MemorySaver()
     graph = StateGraph(AgentState)
 
+    graph.add_node('validator', validator_node)
     graph.add_node('agent', agent_node)
     graph.add_node('tools', tool_node)
 
-    graph.set_entry_point('agent')
+    graph.set_entry_point('validator')
+
+    graph.add_conditional_edges('validator', validator_decision)
 
     # Conditional edge - заменяет обычный add_edge от router
     graph.add_conditional_edges('agent', tools_condition)
