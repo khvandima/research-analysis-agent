@@ -1,0 +1,13 @@
+fastapi
+uvicorn
+langchain-groq
+langchain-mcp-adapters
+langgraph
+qdrant-client
+sentence-transformers
+pypdf
+tavily-python
+fastmcp
+python-dotenv
+pydantic
+requests
