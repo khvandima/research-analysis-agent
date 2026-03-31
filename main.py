@@ -19,7 +19,7 @@ async def main():
     config = {'configurable': {'thread_id': '1'}}
 
     result = await app.ainvoke(
-        {"messages": [HumanMessage(content="Сравни")]},
+        {"messages": [HumanMessage(content="Загрузи PDF файл: /home/khvandima/Projects/agent_playground/proektirovanie-sistem-mo.pdf")]},
         config=config
     )
 

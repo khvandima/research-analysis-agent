@@ -5,7 +5,7 @@ from tavily import TavilyClient
 from qdrant_client import QdrantClient
 import requests
 
-from rag import ingest_text, search_chunks, ingest_pdf
+from rag import ingest_text, search_chunks, ingest_pdf, ingest_markdown
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -95,11 +95,18 @@ def search_documents(query: str) -> str:
 
 
 @mcp.tool()
-def ingest_pdf_file(file_path: str) -> str:
-    """По заданному пути считывает текст из pdf и добавляет в базу данных qdrant"""
+def ingest_file(file_path: str) -> str:
+    """Загружает документ в базу знаний. Автоматически определяет формат по расширению. Поддерживает PDF (.pdf) и Markdown (.md, .markdown)"""
     try:
-        ingest_pdf(file_path, collection_name=os.getenv("COLLECTION_NAME"), client=qdrant_client, model=embedding_model)
-        return 'Файл добавлен'
+        if file_path.endswith('.pdf'):
+            ingest_pdf(pdf_path=file_path, collection_name=os.getenv("COLLECTION_NAME"), client=qdrant_client, model=embedding_model)
+        elif file_path.endswith(('.md', '.markdown')):
+            ingest_markdown(md_path=file_path, collection_name=os.getenv("COLLECTION_NAME"), client=qdrant_client, model=embedding_model)
+        else:
+            return f"Неподдерживаемый формат: {file_path}. Поддерживаются .pdf и .md"
+        return 'Файл успешно добавлен в базу знаний'
+    except FileNotFoundError:
+        return f"Файл не найден: {file_path}"
     except Exception as e:
         return str(e)
 
